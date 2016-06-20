@@ -41,8 +41,9 @@ declare namespace Vuex {
   }
 
   interface Module<S> {
-    state: S;
-    mutations: MutationTree<S>;
+    state?: S;
+    mutations?: MutationTree<S>;
+    modules?: ModuleTree;
   }
 
   interface ModuleTree {
