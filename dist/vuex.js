@@ -9,20 +9,19 @@
   (global.Vuex = factory());
 }(this, function () { 'use strict';
 
-  var babelHelpers = {};
-  babelHelpers.typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+  var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
     return typeof obj;
   } : function (obj) {
     return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj;
   };
 
-  babelHelpers.classCallCheck = function (instance, Constructor) {
+  var classCallCheck = function (instance, Constructor) {
     if (!(instance instanceof Constructor)) {
       throw new TypeError("Cannot call a class as a function");
     }
   };
 
-  babelHelpers.createClass = function () {
+  var createClass = function () {
     function defineProperties(target, props) {
       for (var i = 0; i < props.length; i++) {
         var descriptor = props[i];
@@ -40,7 +39,7 @@
     };
   }();
 
-  babelHelpers.toConsumableArray = function (arr) {
+  var toConsumableArray = function (arr) {
     if (Array.isArray(arr)) {
       for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];
 
@@ -49,8 +48,6 @@
       return Array.from(arr);
     }
   };
-
-  babelHelpers;
 
   /**
    * Merge an array of objects into one.
@@ -67,9 +64,9 @@
           // allow multiple mutation objects to contain duplicate
           // handlers for the same mutation type
           if (Array.isArray(existing)) {
-            existing.push(obj[key]);
+            prev[key] = existing.concat(obj[key]);
           } else {
-            prev[key] = [prev[key], obj[key]];
+            prev[key] = [existing].concat(obj[key]);
           }
         } else {
           prev[key] = obj[key];
@@ -89,7 +86,7 @@
   function deepClone(obj) {
     if (Array.isArray(obj)) {
       return obj.map(deepClone);
-    } else if (obj && (typeof obj === 'undefined' ? 'undefined' : babelHelpers.typeof(obj)) === 'object') {
+    } else if (obj && (typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object') {
       var cloned = {};
       var keys = Object.keys(obj);
       for (var i = 0, l = keys.length; i < l; i++) {
@@ -100,6 +97,30 @@
     } else {
       return obj;
     }
+  }
+
+  /**
+   * Check whether the given value is Object or not
+   *
+   * @param {*} obj
+   * @return {Boolean}
+   */
+
+  function isObject(obj) {
+    return obj !== null && (typeof obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object';
+  }
+
+  /**
+   * Get state sub tree by given keys.
+   *
+   * @param {Object} state
+   * @param {Array<String>} nestedKeys
+   * @return {Object}
+   */
+  function getNestedState(state, nestedKeys) {
+    return nestedKeys.reduce(function (state, key) {
+      return state[key];
+    }, state);
   }
 
   /**
@@ -333,7 +354,7 @@
       var middlewares = _ref$middlewares === undefined ? [] : _ref$middlewares;
       var _ref$strict = _ref.strict;
       var strict = _ref$strict === undefined ? false : _ref$strict;
-      babelHelpers.classCallCheck(this, Store);
+      classCallCheck(this, Store);
 
       this._getterCacheId = 'vuex_store_' + uid++;
       this._dispatching = false;
@@ -376,7 +397,7 @@
      * @return {Object}
      */
 
-    babelHelpers.createClass(Store, [{
+    createClass(Store, [{
       key: 'dispatch',
 
 
@@ -393,7 +414,7 @@
 
         var silent = false;
         // compatibility for object actions, e.g. FSA
-        if ((typeof type === 'undefined' ? 'undefined' : babelHelpers.typeof(type)) === 'object' && type.type && arguments.length === 1) {
+        if ((typeof type === 'undefined' ? 'undefined' : _typeof(type)) === 'object' && type.type && arguments.length === 1) {
           payload = [type.payload];
           if (type.silent) silent = true;
           type = type.type;
@@ -405,10 +426,10 @@
           // apply the mutation
           if (Array.isArray(mutation)) {
             mutation.forEach(function (m) {
-              return m.apply(undefined, [state].concat(babelHelpers.toConsumableArray(payload)));
+              return m.apply(undefined, [state].concat(toConsumableArray(payload)));
             });
           } else {
-            mutation.apply(undefined, [state].concat(babelHelpers.toConsumableArray(payload)));
+            mutation.apply(undefined, [state].concat(toConsumableArray(payload)));
           }
           this._dispatching = false;
           if (!silent) this._applyMiddlewares(type, payload);
@@ -467,8 +488,18 @@
     }, {
       key: '_setupModuleState',
       value: function _setupModuleState(state, modules) {
+        var _this3 = this;
+
+        if (!isObject(modules)) return;
+
         Object.keys(modules).forEach(function (key) {
-          Vue.set(state, key, modules[key].state || {});
+          var module = modules[key];
+
+          // set this module's state
+          Vue.set(state, key, module.state || {});
+
+          // retrieve nested modules
+          _this3._setupModuleState(state[key], module.modules);
         });
       }
 
@@ -483,13 +514,41 @@
       key: '_setupModuleMutations',
       value: function _setupModuleMutations(updatedModules) {
         var modules = this._modules;
-        var allMutations = [this._rootMutations];
         Object.keys(updatedModules).forEach(function (key) {
           modules[key] = updatedModules[key];
         });
-        Object.keys(modules).forEach(function (key) {
+        var updatedMutations = this._createModuleMutations(modules, []);
+        this._mutations = mergeObjects([this._rootMutations].concat(toConsumableArray(updatedMutations)));
+      }
+
+      /**
+       * Helper method for _setupModuleMutations.
+       * The method retrieve nested sub modules and
+       * bind each mutations to its sub tree recursively.
+       *
+       * @param {Object} modules
+       * @param {Array<String>} nestedKeys
+       * @return {Array<Object>}
+       */
+
+    }, {
+      key: '_createModuleMutations',
+      value: function _createModuleMutations(modules, nestedKeys) {
+        var _this4 = this;
+
+        if (!isObject(modules)) return [];
+
+        return Object.keys(modules).map(function (key) {
           var module = modules[key];
-          if (!module || !module.mutations) return;
+          var newNestedKeys = nestedKeys.concat(key);
+
+          // retrieve nested modules
+          var nestedMutations = _this4._createModuleMutations(module.modules, newNestedKeys);
+
+          if (!module || !module.mutations) {
+            return mergeObjects(nestedMutations);
+          }
+
           // bind mutations to sub state tree
           var mutations = {};
           Object.keys(module.mutations).forEach(function (name) {
@@ -499,12 +558,13 @@
                 args[_key3 - 1] = arguments[_key3];
               }
 
-              original.apply(undefined, [state[key]].concat(args));
+              original.apply(undefined, [getNestedState(state, newNestedKeys)].concat(args));
             };
           });
-          allMutations.push(mutations);
+
+          // merge mutations of this module and nested modules
+          return mergeObjects([mutations].concat(toConsumableArray(nestedMutations)));
         });
-        this._mutations = mergeObjects(allMutations);
       }
 
       /**
@@ -519,12 +579,12 @@
     }, {
       key: '_setupMutationCheck',
       value: function _setupMutationCheck() {
-        var _this3 = this;
+        var _this5 = this;
 
         var Watcher = getWatcher(this._vm);
         /* eslint-disable no-new */
         new Watcher(this._vm, '$data', function () {
-          if (!_this3._dispatching) {
+          if (!_this5._dispatching) {
             throw new Error('[vuex] Do not mutate vuex store state outside mutation handlers.');
           }
         }, { deep: true, sync: true });
@@ -545,7 +605,7 @@
     }, {
       key: '_setupMiddlewares',
       value: function _setupMiddlewares(middlewares, state) {
-        var _this4 = this;
+        var _this6 = this;
 
         this._middlewares = [devtoolMiddleware].concat(middlewares);
         this._needSnapshots = middlewares.some(function (m) {
@@ -558,7 +618,7 @@
         // call init hooks
         this._middlewares.forEach(function (m) {
           if (m.onInit) {
-            m.onInit(m.snapshot ? initialSnapshot : state, _this4);
+            m.onInit(m.snapshot ? initialSnapshot : state, _this6);
           }
         });
       }
@@ -573,7 +633,7 @@
     }, {
       key: '_applyMiddlewares',
       value: function _applyMiddlewares(type, payload) {
-        var _this5 = this;
+        var _this7 = this;
 
         var state = this.state;
         var prevSnapshot = this._prevSnapshot;
@@ -586,9 +646,9 @@
         this._middlewares.forEach(function (m) {
           if (m.onMutation) {
             if (m.snapshot) {
-              m.onMutation({ type: type, payload: clonedPayload }, snapshot, prevSnapshot, _this5);
+              m.onMutation({ type: type, payload: clonedPayload }, snapshot, prevSnapshot, _this7);
             } else {
-              m.onMutation({ type: type, payload: payload }, state, _this5);
+              m.onMutation({ type: type, payload: payload }, state, _this7);
             }
           }
         });
