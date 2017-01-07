@@ -1,8 +1,15 @@
 {
   "root": true,
   "parser": "babel-eslint",
+  "plugins": [
+    "flowtype"
+  ],
   "parserOptions": {
     "sourceType": "module"
   },
-  "extends": "vue"
+  "extends": "vue",
+  "rules": {
+    "flowtype/define-flow-type": 1,
+    "flowtype/use-flow-type": 1
+  }
 }

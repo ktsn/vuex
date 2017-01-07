@@ -1,5 +1,6 @@
 const buble = require('rollup-plugin-buble')
 const replace = require('rollup-plugin-replace')
+const flow = require('rollup-plugin-flow')
 const version = process.env.VERSION || require('../package.json').version
 
 module.exports = {
@@ -8,6 +9,7 @@ module.exports = {
   format: 'umd',
   moduleName: 'Vuex',
   plugins: [
+    flow({ pretty: true }),
     replace({ __VERSION__: version }),
     buble()
   ],
